@@ -1,0 +1,11 @@
+[project]
+name = "sc-2538-clean-up-tenancy"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "oci>=2.150.2",
+    "tenacity>=9.1.2",
+    "tqdm>=4.67.1",
+]

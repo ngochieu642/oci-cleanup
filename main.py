@@ -1,9 +1,9 @@
-import json
-import oci
 import argparse
-import time
-from tqdm import tqdm
+
+import oci
 from tenacity import retry, stop_after_attempt, wait_fixed
+from tqdm import tqdm
+
 
 def list_object_versions(object_storage_client, bucket_name, namespace):
     """List all object versions in a bucket"""
@@ -13,10 +13,16 @@ def list_object_versions(object_storage_client, bucket_name, namespace):
             bucket_name=bucket_name
         )
         
-        return response.data
+        # Convert ObjectVersionCollection to list using the items property
+        all_objects = []
+        for item in response.data.items:
+            all_objects.append(item)
+            
+        return all_objects
     except Exception as e:
         print(f"Error listing object versions: {e}")
         return []
+
 
 @retry(stop=stop_after_attempt(4), wait=wait_fixed(10))
 def delete_object_with_retry(object_storage_client, namespace, bucket_name, object_name, version_id):
@@ -28,6 +34,7 @@ def delete_object_with_retry(object_storage_client, namespace, bucket_name, obje
         version_id=version_id
     )
 
+
 def delete_objects_from_bucket(oci_profile, bucket_name, namespace, max_retries=4, retry_delay=10):
     """Delete all object versions from a bucket with progress bar and retry mechanism"""
     # Load OCI config from specified profile
@@ -37,7 +44,7 @@ def delete_objects_from_bucket(oci_profile, bucket_name, namespace, max_retries=
     # Get list of object versions
     print("Fetching object versions...")
     objects = list_object_versions(object_storage_client, bucket_name, namespace)
-    
+
     if not objects:
         print("No objects found in the bucket.")
         return
@@ -59,8 +66,9 @@ def delete_objects_from_bucket(oci_profile, bucket_name, namespace, max_retries=
                 pbar.set_description(f"Deleted: {object_name}")
             except Exception as e:
                 print(f"\nError deleting {object_name} | Version ID: {version_id}: {e}")
-            
+
             pbar.update(1)
+
 
 def main():
     # Set up CLI argument parsing
@@ -81,6 +89,7 @@ def main():
         max_retries=args.max_retries,
         retry_delay=args.retry_delay
     )
+
 
 if __name__ == "__main__":
     main()
