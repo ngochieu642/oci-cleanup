@@ -1,6 +1,5 @@
-import json
 import argparse
-import time
+
 import oci
 from tenacity import retry, stop_after_attempt, wait_fixed
 from tqdm import tqdm
@@ -13,12 +12,12 @@ def list_object_versions(object_storage_client, bucket_name, namespace):
             namespace_name=namespace,
             bucket_name=bucket_name
         )
-        
+
         # Convert ObjectVersionCollection to list using the items property
         all_objects = []
         for item in response.data.items:
             all_objects.append(item)
-            
+
         return all_objects
     except Exception as e:
         print(f"Error listing object versions: {e}")
@@ -70,6 +69,34 @@ def verify_bucket_exists(object_storage_client, namespace, bucket_name):
         return False
 
 
+def list_preauthenticated_requests(object_storage_client, namespace, bucket_name):
+    """List all preauthenticated requests in a bucket"""
+    try:
+        response = object_storage_client.list_preauthenticated_requests(
+            namespace_name=namespace,
+            bucket_name=bucket_name
+        )
+        return response.data
+    except Exception as e:
+        print(f"Error listing preauthenticated requests for bucket '{bucket_name}': {e}")
+        return []
+
+
+@retry(stop=stop_after_attempt(4), wait=wait_fixed(10))
+def delete_par_with_retry(object_storage_client, namespace, bucket_name, par_id):
+    """Delete a preauthenticated request with retry mechanism"""
+    try:
+        object_storage_client.delete_preauthenticated_request(
+            namespace_name=namespace,
+            bucket_name=bucket_name,
+            par_id=par_id
+        )
+        return True
+    except Exception as e:
+        print(f"\nError deleting preauthenticated request {par_id}: {e}")
+        return False
+
+
 def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=None):
     """Delete all objects from a bucket and then delete the bucket itself"""
     bucket_desc = f"Cleaning bucket: {bucket_name}"
@@ -86,7 +113,7 @@ def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=N
 
     # Get list of object versions
     objects = list_object_versions(object_storage_client, bucket_name, namespace)
-    
+
     if not objects:
         print(f"No objects found in bucket '{bucket_name}'")
     else:
@@ -107,15 +134,36 @@ def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=N
                     obj_pbar.set_description(f"Deleted: {object_name}")
                 except Exception as e:
                     print(f"\nError deleting {object_name} | Version ID: {version_id}: {e}")
-                
+
                 obj_pbar.update(1)
-    
-    # After all objects are deleted, delete the bucket
+
+    # Delete all preauthenticated requests
+    pars = list_preauthenticated_requests(object_storage_client, namespace, bucket_name)
+    if pars:
+        with tqdm(total=len(pars), desc=f"Deleting preauthenticated requests in {bucket_name}",
+                  leave=False) as par_pbar:
+            for par in pars:
+                try:
+                    delete_par_with_retry(
+                        object_storage_client,
+                        namespace,
+                        bucket_name,
+                        par.id
+                    )
+                    par_pbar.set_description(f"Deleted PAR: {par.id}")
+                except Exception as e:
+                    print(f"\nError deleting PAR {par.id}: {e}")
+
+                par_pbar.update(1)
+    else:
+        print(f"No preauthenticated requests found in bucket '{bucket_name}'")
+
+    # After all objects and PARs are deleted, delete the bucket
     success = delete_bucket_with_retry(object_storage_client, namespace, bucket_name)
-    
+
     if bucket_pbar:
         bucket_pbar.update(1)
-    
+
     return success
 
 
@@ -141,7 +189,7 @@ def clean_up_buckets_from_file(oci_profile, bucket_file, namespace):
         return
 
     print(f"\nStarting cleanup of {len(buckets)} buckets...")
-    
+
     # Create progress bar for buckets
     with tqdm(total=len(buckets), desc="Overall progress", position=0) as bucket_pbar:
         for bucket_name in buckets:
@@ -150,7 +198,8 @@ def clean_up_buckets_from_file(oci_profile, bucket_file, namespace):
 
 def main():
     # Set up CLI argument parsing
-    parser = argparse.ArgumentParser(description="Clean up OCI buckets by deleting all objects and the buckets themselves")
+    parser = argparse.ArgumentParser(
+        description="Clean up OCI buckets by deleting all objects and the buckets themselves")
     parser.add_argument("--oci_profile", required=True, help="OCI profile to use from the config file")
     parser.add_argument("--bucket_name", help="Single bucket name to clean up")
     parser.add_argument("--bucket_file", help="File containing list of buckets to clean up (one per line)")
@@ -162,7 +211,7 @@ def main():
 
     if not args.bucket_name and not args.bucket_file:
         parser.error("Either --bucket_name or --bucket_file must be specified")
-    
+
     if args.bucket_name and args.bucket_file:
         parser.error("Cannot specify both --bucket_name and --bucket_file")
 
