@@ -1,0 +1,113 @@
+{
+  "data": [
+    {
+      "archival-state": null,
+      "etag": "58a1f1d3-2129-4ef0-ab8f-1e05bf9dfae1",
+      "is-delete-marker": false,
+      "md5": "zA5fC7ZVEfwF2oz6k67DbA==",
+      "name": "032f39a4-e307-3224-c7ba-e892c0b90327/032f39a4-e307-3224-c7ba-e892c0b90327.json",
+      "size": 192106,
+      "storage-tier": "Standard",
+      "time-created": "2023-03-21T13:25:13.842000+00:00",
+      "time-modified": "2023-03-21T13:25:13.842000+00:00",
+      "version-id": "9ebe6906-0a24-49b4-838f-b27881dc1d9d"
+    },
+    {
+      "archival-state": null,
+      "etag": "92c8cd06-e657-44bb-9d1f-153e3801c7ce",
+      "is-delete-marker": false,
+      "md5": "ydMEv+jgxFRHqisAUJyxXw==",
+      "name": "032f39a4-e307-3224-c7ba-e892c0b90327/032f39a4-e307-3224-c7ba-e892c0b90327.vcf",
+      "size": 2154,
+      "storage-tier": "Standard",
+      "time-created": "2023-03-21T13:25:13.765000+00:00",
+      "time-modified": "2023-03-21T13:25:13.765000+00:00",
+      "version-id": "165c895b-1936-4eb9-8e45-c68501c06aa7"
+    },
+    {
+      "archival-state": null,
+      "etag": "2a8f9426-8e64-4937-aab2-7e66bd35e6da",
+      "is-delete-marker": false,
+      "md5": "Zg5dpbhRRkJ+BJMFW1iuxA==",
+      "name": "05a9600f-d1e7-f987-e41a-91bb95402568/05a9600f-d1e7-f987-e41a-91bb95402568.bam",
+      "size": 1679114,
+      "storage-tier": "InfrequentAccess",
+      "time-created": "2023-03-21T13:25:22.418000+00:00",
+      "time-modified": "2023-03-21T13:25:22.418000+00:00",
+      "version-id": "f1a00072-d38e-49e7-a955-3b5b8d9813f9"
+    },
+    {
+      "archival-state": null,
+      "etag": "2ef34d0e-800b-42d9-97cd-c24ed750dd53",
+      "is-delete-marker": false,
+      "md5": "UZeR0kEM8ClGEFEoKyADow==",
+      "name": "09d2eec2-ae4a-f24e-733e-73c6f9d5c49a/09d2eec2-ae4a-f24e-733e-73c6f9d5c49a.json",
+      "size": 205967,
+      "storage-tier": "Standard",
+      "time-created": "2023-03-21T13:25:20.176000+00:00",
+      "time-modified": "2023-03-21T13:25:20.176000+00:00",
+      "version-id": "2df5f6be-0338-4e26-a9c5-930ffa9f9bc7"
+    },
+    {
+      "archival-state": null,
+      "etag": "2a7298e9-4730-487b-9ff1-9c0019890e6a",
+      "is-delete-marker": false,
+      "md5": "pQwxA5ZdBtS8padGPRyYWg==",
+      "name": "46aa2c45-4905-985d-45e3-dcde30caf271/46aa2c45-4905-985d-45e3-dcde30caf271.vcf",
+      "size": 3054,
+      "storage-tier": "Standard",
+      "time-created": "2023-03-21T13:25:43.787000+00:00",
+      "time-modified": "2023-03-21T13:25:43.787000+00:00",
+      "version-id": "82173b4b-f79f-4b65-ac70-79c30b6a7925"
+    },
+    {
+      "archival-state": null,
+      "etag": "88270e8c-2f95-45cc-91fe-e2ad64eb9e41",
+      "is-delete-marker": false,
+      "md5": "RNgWzjHluD26eqf8kOwQXQ==",
+      "name": "530b1f39-52fc-1584-c451-5068336ad844/530b1f39-52fc-1584-c451-5068336ad844.vcf",
+      "size": 3383,
+      "storage-tier": "Standard",
+      "time-created": "2023-03-21T13:25:56.496000+00:00",
+      "time-modified": "2023-03-21T13:25:56.496000+00:00",
+      "version-id": "f45815d7-520f-4b0d-870a-783f381ac75d"
+    },
+    {
+      "archival-state": null,
+      "etag": "f61bcca0-f861-4532-ab7f-b22704bf8e04",
+      "is-delete-marker": false,
+      "md5": "VmlfuhKkRWvzL9afVqwb1g==",
+      "name": "557dddeb-0de4-1984-65db-ba26a145ee78/557dddeb-0de4-1984-65db-ba26a145ee78.bam",
+      "size": 1350527,
+      "storage-tier": "InfrequentAccess",
+      "time-created": "2023-03-21T13:24:39.731000+00:00",
+      "time-modified": "2023-03-21T13:24:39.731000+00:00",
+      "version-id": "a8d9458a-bea5-4091-abf6-d490dc696820"
+    },
+    {
+      "archival-state": null,
+      "etag": "56c6dff5-3874-45e0-b1f0-b389c98817dc",
+      "is-delete-marker": false,
+      "md5": "6yW0QY78VQq4McjlMeZ3vA==",
+      "name": "557dddeb-0de4-1984-65db-ba26a145ee78/557dddeb-0de4-1984-65db-ba26a145ee78.fasta.gz",
+      "size": 8937,
+      "storage-tier": "Standard",
+      "time-created": "2023-03-21T13:24:39.553000+00:00",
+      "time-modified": "2023-03-21T13:24:39.553000+00:00",
+      "version-id": "3b6c67f8-af02-44a1-bc2f-e4f1f69a9c65"
+    },
+    {
+      "archival-state": null,
+      "etag": "b72465ab-1e88-4e91-9138-632be5425b09",
+      "is-delete-marker": false,
+      "md5": "+UlLnOO1M4gom93G1VcAvg==",
+      "name": "b525462c-7649-1879-2902-2e51ae1fc109/b525462c-7649-1879-2902-2e51ae1fc109.vcf",
+      "size": 3483,
+      "storage-tier": "Standard",
+      "time-created": "2023-03-21T13:24:45.843000+00:00",
+      "time-modified": "2023-03-21T13:24:45.843000+00:00",
+      "version-id": "3d47e143-d690-4df3-b3e5-f8217f2b0f6f"
+    }
+  ],
+  "prefixes": []
+}
