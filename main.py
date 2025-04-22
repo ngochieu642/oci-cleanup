@@ -54,11 +54,31 @@ def delete_bucket_with_retry(object_storage_client, namespace, bucket_name):
         return False
 
 
+def verify_bucket_exists(object_storage_client, namespace, bucket_name):
+    """Verify if a bucket exists"""
+    try:
+        object_storage_client.get_bucket(
+            namespace_name=namespace,
+            bucket_name=bucket_name
+        )
+        return True
+    except oci.exceptions.ServiceError as e:
+        if e.code == "BucketNotFound":
+            print(f"\nBucket '{bucket_name}' does not exist.")
+        else:
+            print(f"\nError verifying bucket '{bucket_name}': {e}")
+        return False
+
+
 def clean_up_bucket(oci_profile, bucket_name, namespace, max_retries=4, retry_delay=10):
     """Delete all objects from a bucket and then delete the bucket itself"""
     # Load OCI config from specified profile
     config = oci.config.from_file(profile_name=oci_profile)
     object_storage_client = oci.object_storage.ObjectStorageClient(config)
+
+    # Verify bucket exists
+    if not verify_bucket_exists(object_storage_client, namespace, bucket_name):
+        return
 
     # Get list of object versions
     print("Fetching object versions...")
