@@ -70,25 +70,28 @@ def verify_bucket_exists(object_storage_client, namespace, bucket_name):
         return False
 
 
-def clean_up_bucket(oci_profile, bucket_name, namespace, max_retries=4, retry_delay=10):
+def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=None):
     """Delete all objects from a bucket and then delete the bucket itself"""
-    # Load OCI config from specified profile
-    config = oci.config.from_file(profile_name=oci_profile)
-    object_storage_client = oci.object_storage.ObjectStorageClient(config)
+    bucket_desc = f"Cleaning bucket: {bucket_name}"
+    if bucket_pbar:
+        bucket_pbar.set_description(bucket_desc)
+    else:
+        print(f"\n{bucket_desc}")
 
     # Verify bucket exists
     if not verify_bucket_exists(object_storage_client, namespace, bucket_name):
-        return
+        if bucket_pbar:
+            bucket_pbar.update(1)
+        return False
 
     # Get list of object versions
-    print("Fetching object versions...")
     objects = list_object_versions(object_storage_client, bucket_name, namespace)
     
     if not objects:
-        print("No objects found in the bucket.")
+        print(f"No objects found in bucket '{bucket_name}'")
     else:
         # Create progress bar for object deletion
-        with tqdm(total=len(objects), desc="Deleting objects") as pbar:
+        with tqdm(total=len(objects), desc=f"Deleting objects in {bucket_name}", leave=False) as obj_pbar:
             for item in objects:
                 object_name = item.name
                 version_id = item.version_id
@@ -101,36 +104,76 @@ def clean_up_bucket(oci_profile, bucket_name, namespace, max_retries=4, retry_de
                         object_name,
                         version_id
                     )
-                    pbar.set_description(f"Deleted: {object_name}")
+                    obj_pbar.set_description(f"Deleted: {object_name}")
                 except Exception as e:
                     print(f"\nError deleting {object_name} | Version ID: {version_id}: {e}")
                 
-                pbar.update(1)
+                obj_pbar.update(1)
     
     # After all objects are deleted, delete the bucket
-    print("\nAttempting to delete the bucket...")
-    delete_bucket_with_retry(object_storage_client, namespace, bucket_name)
+    success = delete_bucket_with_retry(object_storage_client, namespace, bucket_name)
+    
+    if bucket_pbar:
+        bucket_pbar.update(1)
+    
+    return success
+
+
+def clean_up_buckets_from_file(oci_profile, bucket_file, namespace):
+    """Clean up multiple buckets listed in a file"""
+    # Load OCI config from specified profile
+    config = oci.config.from_file(profile_name=oci_profile)
+    object_storage_client = oci.object_storage.ObjectStorageClient(config)
+
+    # Read bucket names from file
+    try:
+        with open(bucket_file, 'r') as f:
+            buckets = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print(f"Error: Bucket list file '{bucket_file}' not found.")
+        return
+    except Exception as e:
+        print(f"Error reading bucket list file: {e}")
+        return
+
+    if not buckets:
+        print("No buckets found in the file.")
+        return
+
+    print(f"\nStarting cleanup of {len(buckets)} buckets...")
+    
+    # Create progress bar for buckets
+    with tqdm(total=len(buckets), desc="Overall progress", position=0) as bucket_pbar:
+        for bucket_name in buckets:
+            clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar)
 
 
 def main():
     # Set up CLI argument parsing
-    parser = argparse.ArgumentParser(description="Clean up an OCI bucket by deleting all objects and the bucket itself")
+    parser = argparse.ArgumentParser(description="Clean up OCI buckets by deleting all objects and the buckets themselves")
     parser.add_argument("--oci_profile", required=True, help="OCI profile to use from the config file")
-    parser.add_argument("--bucket_name", required=True, help="The name of the bucket to clean up")
+    parser.add_argument("--bucket_name", help="Single bucket name to clean up")
+    parser.add_argument("--bucket_file", help="File containing list of buckets to clean up (one per line)")
     parser.add_argument("--max_retries", type=int, default=4, help="Maximum number of retry attempts")
     parser.add_argument("--retry_delay", type=int, default=10, help="Delay between retries in seconds")
 
     # Parse arguments
     args = parser.parse_args()
 
-    # Call the clean_up_bucket function with parsed arguments
-    clean_up_bucket(
-        args.oci_profile,
-        args.bucket_name,
-        'lrbvkel2wjot',
-        max_retries=args.max_retries,
-        retry_delay=args.retry_delay
-    )
+    if not args.bucket_name and not args.bucket_file:
+        parser.error("Either --bucket_name or --bucket_file must be specified")
+    
+    if args.bucket_name and args.bucket_file:
+        parser.error("Cannot specify both --bucket_name and --bucket_file")
+
+    # Initialize OCI client
+    config = oci.config.from_file(profile_name=args.oci_profile)
+    object_storage_client = oci.object_storage.ObjectStorageClient(config)
+
+    if args.bucket_file:
+        clean_up_buckets_from_file(args.oci_profile, args.bucket_file, 'lrbvkel2wjot')
+    else:
+        clean_up_bucket(object_storage_client, args.bucket_name, 'lrbvkel2wjot')
 
 
 if __name__ == "__main__":
