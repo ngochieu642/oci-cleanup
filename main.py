@@ -74,7 +74,8 @@ def list_preauthenticated_requests(object_storage_client, namespace, bucket_name
     try:
         response = object_storage_client.list_preauthenticated_requests(
             namespace_name=namespace,
-            bucket_name=bucket_name
+            bucket_name=bucket_name,
+            limit=1000
         )
         return response.data
     except Exception as e:
