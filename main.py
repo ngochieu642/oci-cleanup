@@ -6,18 +6,27 @@ from tqdm import tqdm
 
 
 def list_object_versions(object_storage_client, bucket_name, namespace):
-    """List all object versions in a bucket"""
+    """List all object versions in a bucket with pagination"""
     try:
-        response = object_storage_client.list_object_versions(
-            namespace_name=namespace,
-            bucket_name=bucket_name
-        )
-
-        # Convert ObjectVersionCollection to list using the items property
         all_objects = []
-        for item in response.data.items:
-            all_objects.append(item)
-
+        next_page = None
+        
+        while True:
+            response = object_storage_client.list_object_versions(
+                namespace_name=namespace,
+                bucket_name=bucket_name,
+                page=next_page,
+                limit=1000
+            )
+            
+            if response.data.items:
+                all_objects.extend(response.data.items)
+            
+            # Check if there are more items
+            next_page = response.headers.get('opc-next-page')
+            if not next_page:
+                break
+            
         return all_objects
     except Exception as e:
         print(f"Error listing object versions: {e}")
@@ -70,14 +79,28 @@ def verify_bucket_exists(object_storage_client, namespace, bucket_name):
 
 
 def list_preauthenticated_requests(object_storage_client, namespace, bucket_name):
-    """List all preauthenticated requests in a bucket"""
+    """List all preauthenticated requests in a bucket with pagination"""
     try:
-        response = object_storage_client.list_preauthenticated_requests(
-            namespace_name=namespace,
-            bucket_name=bucket_name,
-            limit=1000
-        )
-        return response.data
+        all_pars = []
+        next_page = None
+        
+        while True:
+            response = object_storage_client.list_preauthenticated_requests(
+                namespace_name=namespace,
+                bucket_name=bucket_name,
+                page=next_page,
+                limit=1000
+            )
+            
+            if response.data:
+                all_pars.extend(response.data)
+            
+            # Check if there are more items
+            next_page = response.headers.get('opc-next-page')
+            if not next_page:
+                break
+            
+        return all_pars
     except Exception as e:
         print(f"Error listing preauthenticated requests for bucket '{bucket_name}': {e}")
         return []
