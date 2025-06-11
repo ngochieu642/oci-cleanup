@@ -121,8 +121,52 @@ def delete_par_with_retry(object_storage_client, namespace, bucket_name, par_id)
         return False
 
 
-def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=None):
-    """Delete all objects from a bucket and then delete the bucket itself"""
+def list_multipart_uploads(object_storage_client, namespace, bucket_name):
+    """List all multipart uploads in a bucket with pagination"""
+    try:
+        all_uploads = []
+        next_page = None
+        
+        while True:
+            response = object_storage_client.list_multipart_uploads(
+                namespace_name=namespace,
+                bucket_name=bucket_name,
+                page=next_page,
+                limit=1000
+            )
+            
+            if response.data:
+                all_uploads.extend(response.data)
+            
+            # Check if there are more items
+            next_page = response.headers.get('opc-next-page')
+            if not next_page:
+                break
+            
+        return all_uploads
+    except Exception as e:
+        print(f"Error listing multipart uploads for bucket '{bucket_name}': {e}")
+        return []
+
+
+@retry(stop=stop_after_attempt(4), wait=wait_fixed(10))
+def abort_multipart_upload_with_retry(object_storage_client, namespace, bucket_name, object_name, upload_id):
+    """Abort a multipart upload with retry mechanism"""
+    try:
+        object_storage_client.abort_multipart_upload(
+            namespace_name=namespace,
+            bucket_name=bucket_name,
+            object_name=object_name,
+            upload_id=upload_id
+        )
+        return True
+    except Exception as e:
+        print(f"\nError aborting multipart upload {upload_id} for object {object_name}: {e}")
+        return False
+
+
+def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=None, delete_bucket=True):
+    """Delete all objects from a bucket and then delete the bucket itself if delete_bucket is True"""
     bucket_desc = f"Cleaning bucket: {bucket_name}"
     if bucket_pbar:
         bucket_pbar.set_description(bucket_desc)
@@ -137,12 +181,14 @@ def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=N
 
     # Get list of object versions
     objects = list_object_versions(object_storage_client, bucket_name, namespace)
-
+    
     if not objects:
         print(f"No objects found in bucket '{bucket_name}'")
     else:
-        # Create progress bar for object deletion
-        with tqdm(total=len(objects), desc=f"Deleting objects in {bucket_name}", leave=False) as obj_pbar:
+        # Create progress bar for object deletion with percentage format
+        with tqdm(total=len(objects), desc=f"Deleting objects in {bucket_name}", 
+                 bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}',
+                 leave=False) as obj_pbar:
             for item in objects:
                 object_name = item.name
                 version_id = item.version_id
@@ -155,17 +201,20 @@ def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=N
                         object_name,
                         version_id
                     )
-                    obj_pbar.set_description(f"Deleted: {object_name}")
+                    # Calculate percentage and format the description
+                    percentage = (obj_pbar.n + 1) / obj_pbar.total * 100
+                    obj_pbar.set_postfix_str(f"[{percentage:.1f}%] Deleted: {object_name}")
                 except Exception as e:
                     print(f"\nError deleting {object_name} | Version ID: {version_id}: {e}")
-
+                
                 obj_pbar.update(1)
-
+    
     # Delete all preauthenticated requests
     pars = list_preauthenticated_requests(object_storage_client, namespace, bucket_name)
     if pars:
         with tqdm(total=len(pars), desc=f"Deleting preauthenticated requests in {bucket_name}",
-                  leave=False) as par_pbar:
+                 bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}',
+                 leave=False) as par_pbar:
             for par in pars:
                 try:
                     delete_par_with_retry(
@@ -174,24 +223,53 @@ def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=N
                         bucket_name,
                         par.id
                     )
-                    par_pbar.set_description(f"Deleted PAR: {par.id}")
+                    percentage = (par_pbar.n + 1) / par_pbar.total * 100
+                    par_pbar.set_postfix_str(f"[{percentage:.1f}%] Deleted PAR: {par.id}")
                 except Exception as e:
                     print(f"\nError deleting PAR {par.id}: {e}")
-
+                
                 par_pbar.update(1)
     else:
         print(f"No preauthenticated requests found in bucket '{bucket_name}'")
 
-    # After all objects and PARs are deleted, delete the bucket
-    success = delete_bucket_with_retry(object_storage_client, namespace, bucket_name)
-
+    # Abort all multipart uploads
+    multipart_uploads = list_multipart_uploads(object_storage_client, namespace, bucket_name)
+    if multipart_uploads:
+        with tqdm(total=len(multipart_uploads), desc=f"Aborting multipart uploads in {bucket_name}",
+                 bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}',
+                 leave=False) as upload_pbar:
+            for upload in multipart_uploads:
+                try:
+                    abort_multipart_upload_with_retry(
+                        object_storage_client,
+                        namespace,
+                        bucket_name,
+                        upload.object,
+                        upload.upload_id
+                    )
+                    percentage = (upload_pbar.n + 1) / upload_pbar.total * 100
+                    upload_pbar.set_postfix_str(f"[{percentage:.1f}%] Aborted upload: {upload.object}")
+                except Exception as e:
+                    print(f"\nError aborting multipart upload for {upload.object}: {e}")
+                
+                upload_pbar.update(1)
+    else:
+        print(f"No multipart uploads found in bucket '{bucket_name}'")
+    
+    # After all objects, PARs, and multipart uploads are deleted, delete the bucket if requested
+    success = True
+    if delete_bucket:
+        success = delete_bucket_with_retry(object_storage_client, namespace, bucket_name)
+    else:
+        print(f"\nSkipping bucket deletion for '{bucket_name}' as requested")
+    
     if bucket_pbar:
         bucket_pbar.update(1)
-
+    
     return success
 
 
-def clean_up_buckets_from_file(oci_profile, bucket_file, namespace):
+def clean_up_buckets_from_file(oci_profile, bucket_file, namespace, delete_bucket=True):
     """Clean up multiple buckets listed in a file"""
     # Load OCI config from specified profile
     config = oci.config.from_file(profile_name=oci_profile)
@@ -213,11 +291,11 @@ def clean_up_buckets_from_file(oci_profile, bucket_file, namespace):
         return
 
     print(f"\nStarting cleanup of {len(buckets)} buckets...")
-
+    
     # Create progress bar for buckets
     with tqdm(total=len(buckets), desc="Overall progress", position=0) as bucket_pbar:
         for bucket_name in buckets:
-            clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar)
+            clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar, delete_bucket)
 
 
 def main():
@@ -229,13 +307,17 @@ def main():
     parser.add_argument("--bucket_file", help="File containing list of buckets to clean up (one per line)")
     parser.add_argument("--max_retries", type=int, default=4, help="Maximum number of retry attempts")
     parser.add_argument("--retry_delay", type=int, default=10, help="Delay between retries in seconds")
+    parser.add_argument("--delete-bucket", action="store_true", default=True, 
+                       help="Delete the bucket after cleaning up its contents (default: True)")
+    parser.add_argument("--no-delete-bucket", action="store_false", dest="delete_bucket",
+                       help="Skip deleting the bucket after cleaning up its contents")
 
     # Parse arguments
     args = parser.parse_args()
 
     if not args.bucket_name and not args.bucket_file:
         parser.error("Either --bucket_name or --bucket_file must be specified")
-
+    
     if args.bucket_name and args.bucket_file:
         parser.error("Cannot specify both --bucket_name and --bucket_file")
 
@@ -244,9 +326,9 @@ def main():
     object_storage_client = oci.object_storage.ObjectStorageClient(config)
 
     if args.bucket_file:
-        clean_up_buckets_from_file(args.oci_profile, args.bucket_file, 'lrbvkel2wjot')
+        clean_up_buckets_from_file(args.oci_profile, args.bucket_file, 'lrbvkel2wjot', args.delete_bucket)
     else:
-        clean_up_bucket(object_storage_client, args.bucket_name, 'lrbvkel2wjot')
+        clean_up_bucket(object_storage_client, args.bucket_name, 'lrbvkel2wjot', delete_bucket=args.delete_bucket)
 
 
 if __name__ == "__main__":
