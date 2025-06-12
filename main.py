@@ -431,73 +431,6 @@ def cli():
     pass
 
 
-@cli.command(name="clean-bucket")
-@click.option(
-    "--oci-profile", required=True, help="OCI profile to use from the config file"
-)
-@click.option("--bucket-name", help="Single bucket name to clean up")
-@click.option(
-    "--bucket-file",
-    type=click.Path(exists=True),
-    help="File containing list of buckets to clean up (one per line)",
-)
-@click.option(
-    "--max-retries", type=int, default=4, help="Maximum number of retry attempts"
-)
-@click.option(
-    "--retry-delay", type=int, default=10, help="Delay between retries in seconds"
-)
-@click.option(
-    "--delete-bucket/--no-delete-bucket",
-    default=True,
-    help="Delete the bucket after cleaning up its contents",
-)
-@click.option(
-    "--workers",
-    type=int,
-    default=1,
-    help="Number of worker threads for parallel processing",
-)
-def clean_bucket(
-        oci_profile: str,
-        bucket_name: str,
-        bucket_file: str,
-        max_retries: str,
-        retry_delay: str,
-        delete_bucket: bool,
-        workers: int,
-):
-    """Clean up OCI buckets by deleting their contents and optionally the buckets themselves"""
-    if not bucket_name and not bucket_file:
-        raise click.UsageError(
-            "Either --bucket-name or --bucket-file must be specified"
-        )
-
-    if bucket_name and bucket_file:
-        raise click.UsageError("Cannot specify both --bucket-name and --bucket-file")
-
-    # Initialize OCI client
-    config = oci.config.from_file(profile_name=oci_profile)
-    object_storage_client: ObjectStorageClient = oci.object_storage.ObjectStorageClient(
-        config
-    )
-    namespace_response: Response = object_storage_client.get_namespace()
-    namespace: str = namespace_response.data
-
-    if bucket_file:
-        clean_up_buckets_from_file(
-            oci_profile, bucket_file, namespace, delete_bucket, workers
-        )
-    else:
-        clean_up_bucket(
-            object_storage_client,
-            bucket_name,
-            namespace,
-            delete_bucket=delete_bucket,
-            num_workers=workers,
-        )
-
-
 def list_log_analytics_entities(
         log_analytics_client: LogAnalyticsClient, compartment_id: str, namespace: str
 ) -> list[LogAnalyticsEntitySummary]:
@@ -635,6 +568,73 @@ def delete_log_analytics_entity_worker(
         except Empty:
             break
 
+@cli.command(name="clean-bucket")
+@click.option(
+    "--oci-profile", required=True, help="OCI profile to use from the config file"
+)
+@click.option("--bucket-name", help="Single bucket name to clean up")
+@click.option(
+    "--bucket-file",
+    type=click.Path(exists=True),
+    help="File containing list of buckets to clean up (one per line)",
+)
+@click.option(
+    "--max-retries", type=int, default=4, help="Maximum number of retry attempts"
+)
+@click.option(
+    "--retry-delay", type=int, default=10, help="Delay between retries in seconds"
+)
+@click.option(
+    "--delete-bucket/--no-delete-bucket",
+    default=True,
+    help="Delete the bucket after cleaning up its contents",
+)
+@click.option(
+    "--workers",
+    type=int,
+    default=1,
+    help="Number of worker threads for parallel processing",
+)
+def clean_bucket(
+        oci_profile: str,
+        bucket_name: str,
+        bucket_file: str,
+        max_retries: str,
+        retry_delay: str,
+        delete_bucket: bool,
+        workers: int,
+):
+    """Clean up OCI buckets by deleting their contents and optionally the buckets themselves"""
+    if not bucket_name and not bucket_file:
+        raise click.UsageError(
+            "Either --bucket-name or --bucket-file must be specified"
+        )
+
+    if bucket_name and bucket_file:
+        raise click.UsageError("Cannot specify both --bucket-name and --bucket-file")
+
+    # Initialize OCI client
+    config = oci.config.from_file(profile_name=oci_profile)
+    object_storage_client: ObjectStorageClient = oci.object_storage.ObjectStorageClient(
+        config
+    )
+    namespace_response: Response = object_storage_client.get_namespace()
+    namespace: str = namespace_response.data
+
+    if bucket_file:
+        clean_up_buckets_from_file(
+            oci_profile, bucket_file, namespace, delete_bucket, workers
+        )
+    else:
+        clean_up_bucket(
+            object_storage_client,
+            bucket_name,
+            namespace,
+            delete_bucket=delete_bucket,
+            num_workers=workers,
+        )
+
+
 
 @cli.command(name="clean-logs-analytics")
 @click.option(
@@ -651,7 +651,7 @@ def delete_log_analytics_entity_worker(
     default=1,
     help="Number of worker threads for parallel processing",
 )
-def clean_logs_analytics(oci_profile, compartment_id, workers):
+def clean_logs_analytics(oci_profile: str, compartment_id: str, workers: int):
     """Clean up OCI Log Analytics entities in a compartment"""
     # Initialize OCI clients
     config = oci.config.from_file(profile_name=oci_profile)
@@ -664,8 +664,8 @@ def clean_logs_analytics(oci_profile, compartment_id, workers):
 
     # Get namespace using Object Storage client
     try:
-        namespace_response = object_storage_client.get_namespace()
-        namespace = namespace_response.data
+        namespace_response: Response = object_storage_client.get_namespace()
+        namespace: str = namespace_response.data
     except Exception as e:
         raise click.UsageError(f"Failed to get namespace: {e}")
 
