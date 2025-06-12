@@ -1,8 +1,10 @@
 import argparse
-
 import oci
-from tenacity import retry, stop_after_attempt, wait_fixed
+from concurrent.futures import ThreadPoolExecutor
+from queue import Queue, Empty
+from threading import Lock
 from tqdm import tqdm
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 def list_object_versions(object_storage_client, bucket_name, namespace):
@@ -165,7 +167,38 @@ def abort_multipart_upload_with_retry(object_storage_client, namespace, bucket_n
         return False
 
 
-def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=None, delete_bucket=True):
+def delete_object_worker(object_storage_client, namespace, bucket_name, queue, progress_lock, obj_pbar):
+    """Worker function to delete objects from the queue"""
+    while True:
+        try:
+            item = queue.get_nowait()
+            object_name = item.name
+            version_id = item.version_id
+
+            try:
+                delete_object_with_retry(
+                    object_storage_client,
+                    namespace,
+                    bucket_name,
+                    object_name,
+                    version_id
+                )
+                with progress_lock:
+                    percentage = (obj_pbar.n + 1) / obj_pbar.total * 100
+                    obj_pbar.set_postfix_str(f"[{percentage:.1f}%] Deleted: {object_name}")
+                    obj_pbar.update(1)
+            except Exception as e:
+                print(f"\nError deleting {object_name} | Version ID: {version_id}: {e}")
+                with progress_lock:
+                    obj_pbar.update(1)
+            finally:
+                queue.task_done()
+
+        except Empty:
+            break
+
+
+def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=None, delete_bucket=True, num_workers=1):
     """Delete all objects from a bucket and then delete the bucket itself if delete_bucket is True"""
     bucket_desc = f"Cleaning bucket: {bucket_name}"
     if bucket_pbar:
@@ -185,29 +218,42 @@ def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=N
     if not objects:
         print(f"No objects found in bucket '{bucket_name}'")
     else:
-        # Create progress bar for object deletion with percentage format
-        with tqdm(total=len(objects), desc=f"Deleting objects in {bucket_name}", 
+        # Create queue and progress bar for object deletion
+        object_queue = Queue()
+        progress_lock = Lock()
+        print(f"Running with {num_workers} workers")
+        
+        # Create progress bar with percentage format
+        with tqdm(total=len(objects), desc=f"Deleting objects in {bucket_name}",
                  bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}',
                  leave=False) as obj_pbar:
+            
+            # Fill the queue with objects
             for item in objects:
-                object_name = item.name
-                version_id = item.version_id
-
-                try:
-                    delete_object_with_retry(
+                object_queue.put(item)
+            
+            # Create and start worker threads
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                # Submit worker tasks
+                futures = [
+                    executor.submit(
+                        delete_object_worker,
                         object_storage_client,
                         namespace,
                         bucket_name,
-                        object_name,
-                        version_id
+                        object_queue,
+                        progress_lock,
+                        obj_pbar
                     )
-                    # Calculate percentage and format the description
-                    percentage = (obj_pbar.n + 1) / obj_pbar.total * 100
-                    obj_pbar.set_postfix_str(f"[{percentage:.1f}%] Deleted: {object_name}")
-                except Exception as e:
-                    print(f"\nError deleting {object_name} | Version ID: {version_id}: {e}")
+                    for _ in range(num_workers)
+                ]
                 
-                obj_pbar.update(1)
+                # Wait for all tasks to complete
+                for future in futures:
+                    future.result()
+                
+                # Wait for queue to be empty
+                object_queue.join()
     
     # Delete all preauthenticated requests
     pars = list_preauthenticated_requests(object_storage_client, namespace, bucket_name)
@@ -269,7 +315,7 @@ def clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar=N
     return success
 
 
-def clean_up_buckets_from_file(oci_profile, bucket_file, namespace, delete_bucket=True):
+def clean_up_buckets_from_file(oci_profile, bucket_file, namespace, delete_bucket=True, num_workers=1):
     """Clean up multiple buckets listed in a file"""
     # Load OCI config from specified profile
     config = oci.config.from_file(profile_name=oci_profile)
@@ -295,7 +341,7 @@ def clean_up_buckets_from_file(oci_profile, bucket_file, namespace, delete_bucke
     # Create progress bar for buckets
     with tqdm(total=len(buckets), desc="Overall progress", position=0) as bucket_pbar:
         for bucket_name in buckets:
-            clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar, delete_bucket)
+            clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar, delete_bucket, num_workers)
 
 
 def main():
@@ -311,6 +357,8 @@ def main():
                        help="Delete the bucket after cleaning up its contents (default: True)")
     parser.add_argument("--no-delete-bucket", action="store_false", dest="delete_bucket",
                        help="Skip deleting the bucket after cleaning up its contents")
+    parser.add_argument("--workers", type=int, default=1,
+                       help="Number of worker threads for parallel processing (default: 1)")
 
     # Parse arguments
     args = parser.parse_args()
@@ -326,9 +374,11 @@ def main():
     object_storage_client = oci.object_storage.ObjectStorageClient(config)
 
     if args.bucket_file:
-        clean_up_buckets_from_file(args.oci_profile, args.bucket_file, 'lrbvkel2wjot', args.delete_bucket)
+        clean_up_buckets_from_file(args.oci_profile, args.bucket_file, 'lrbvkel2wjot', 
+                                 args.delete_bucket, args.workers)
     else:
-        clean_up_bucket(object_storage_client, args.bucket_name, 'lrbvkel2wjot', delete_bucket=args.delete_bucket)
+        clean_up_bucket(object_storage_client, args.bucket_name, 'lrbvkel2wjot', 
+                       delete_bucket=args.delete_bucket, num_workers=args.workers)
 
 
 if __name__ == "__main__":
