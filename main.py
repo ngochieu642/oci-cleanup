@@ -2,6 +2,9 @@ import oci
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
 from threading import Lock
+
+from oci.log_analytics import LogAnalyticsClient
+from oci.object_storage import ObjectStorageClient
 from tqdm import tqdm
 from tenacity import retry, stop_after_attempt, wait_fixed
 import click
@@ -376,6 +379,146 @@ def clean_bucket(oci_profile, bucket_name, bucket_file, max_retries, retry_delay
     else:
         clean_up_bucket(object_storage_client, bucket_name, 'lrbvkel2wjot', 
                        delete_bucket=delete_bucket, num_workers=workers)
+
+
+def list_log_analytics_entities(log_analytics_client: LogAnalyticsClient, compartment_id: str, namespace: str):
+    """List all log analytics entities in a compartment with pagination"""
+    try:
+        all_entities = []
+        next_page = None
+        
+        while True:
+            response = log_analytics_client.list_log_analytics_entities(
+                namespace_name=namespace,
+                compartment_id=compartment_id,
+                page=next_page,
+                limit=1000
+            )
+
+            if response.data.items:
+                all_entities.extend(response.data.items)
+            
+            # Check if there are more items
+            next_page = response.headers.get('opc-next-page')
+            if not next_page:
+                break
+            
+        return all_entities
+    except Exception as e:
+        print(f"Error listing log analytics entities: {e}")
+        return []
+
+
+@retry(stop=stop_after_attempt(4), wait=wait_fixed(10))
+def delete_log_analytics_entity_with_retry(log_analytics_client, namespace, entity_id):
+    """Delete a log analytics entity with retry mechanism"""
+    try:
+        log_analytics_client.delete_entity(
+            namespace_name=namespace,
+            entity_id=entity_id
+        )
+        return True
+    except Exception as e:
+        print(f"\nError deleting log analytics entity {entity_id}: {e}")
+        return False
+
+
+def clean_log_analytics_entities(log_analytics_client: LogAnalyticsClient, compartment_id: str, namespace: str, num_workers=1):
+    """Delete all log analytics entities in a compartment"""
+    # Get list of log analytics entities
+    entities = list_log_analytics_entities(log_analytics_client, compartment_id, namespace)
+    
+    if not entities:
+        print(f"No log analytics entities found in compartment '{compartment_id}'")
+        return
+    
+    print(f"\nFound {len(entities)} log analytics entities to delete")
+    
+    # Create queue and progress bar for entity deletion
+    entity_queue = Queue()
+    progress_lock = Lock()
+    print(f"Running with {num_workers} workers")
+    
+    # Create progress bar with percentage format
+    with tqdm(total=len(entities), desc="Deleting log analytics entities",
+             bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}',
+             leave=False) as entity_pbar:
+        
+        # Fill the queue with entities
+        for entity in entities:
+            entity_queue.put(entity)
+        
+        # Create and start worker threads
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            # Submit worker tasks
+            futures = [
+                executor.submit(
+                    delete_log_analytics_entity_worker,
+                    log_analytics_client,
+                    namespace,
+                    entity_queue,
+                    progress_lock,
+                    entity_pbar
+                )
+                for _ in range(num_workers)
+            ]
+            
+            # Wait for all tasks to complete
+            for future in futures:
+                future.result()
+            
+            # Wait for queue to be empty
+            entity_queue.join()
+
+
+def delete_log_analytics_entity_worker(log_analytics_client, namespace, queue, progress_lock, entity_pbar):
+    """Worker function to delete log analytics entities from the queue"""
+    while True:
+        try:
+            entity = queue.get_nowait()
+            entity_id = entity.id
+            entity_name = entity.name
+
+            try:
+                delete_log_analytics_entity_with_retry(
+                    log_analytics_client,
+                    namespace,
+                    entity_id
+                )
+                with progress_lock:
+                    percentage = (entity_pbar.n + 1) / entity_pbar.total * 100
+                    entity_pbar.set_postfix_str(f"[{percentage:.1f}%] Deleted: {entity_name}")
+                    entity_pbar.update(1)
+            except Exception as e:
+                print(f"\nError deleting entity {entity_name} | ID: {entity_id}: {e}")
+                with progress_lock:
+                    entity_pbar.update(1)
+            finally:
+                queue.task_done()
+
+        except Empty:
+            break
+
+
+@cli.command(name='clean-logs-analytics')
+@click.option('--oci-profile', required=True, help='OCI profile to use from the config file')
+@click.option('--compartment-id', required=True, help='Compartment ID containing the log analytics entities')
+@click.option('--workers', type=int, default=1, help='Number of worker threads for parallel processing')
+def clean_logs_analytics(oci_profile, compartment_id, workers):
+    """Clean up OCI Log Analytics entities in a compartment"""
+    # Initialize OCI clients
+    config = oci.config.from_file(profile_name=oci_profile)
+    log_analytics_client: LogAnalyticsClient = oci.log_analytics.LogAnalyticsClient(config)
+    object_storage_client: ObjectStorageClient = oci.object_storage.ObjectStorageClient(config)
+    
+    # Get namespace using Object Storage client
+    try:
+        namespace_response = object_storage_client.get_namespace()
+        namespace = namespace_response.data
+    except Exception as e:
+        raise click.UsageError(f"Failed to get namespace: {e}")
+
+    clean_log_analytics_entities(log_analytics_client, compartment_id, namespace, workers)
 
 
 if __name__ == "__main__":
