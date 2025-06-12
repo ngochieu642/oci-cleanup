@@ -11,7 +11,6 @@ from oci.object_storage import ObjectStorageClient
 from oci.object_storage.models import ObjectVersionSummary, MultipartUploadPartSummary
 from tenacity import retry, stop_after_attempt, wait_fixed
 from tqdm import tqdm
-from tqdm.std import _T
 
 
 def list_object_versions(
@@ -209,7 +208,7 @@ def delete_object_worker(
     bucket_name: str,
     queue: Queue[ObjectVersionSummary],
     progress_lock: Lock,
-    obj_pbar: tqdm[_T],
+    obj_pbar,
 ):
     """Worker function to delete objects from the queue"""
     while True:
@@ -568,7 +567,6 @@ def clean_log_analytics_entities(
     print(f"Running with {num_workers} workers")
 
     # Create progress bar with percentage format
-    entity_pbar: tqdm[_T]
     with tqdm(
         total=len(entities),
         desc="Deleting log analytics entities",
@@ -607,7 +605,7 @@ def delete_log_analytics_entity_worker(
     namespace: str,
     queue: Queue[LogAnalyticsEntitySummary],
     progress_lock: Lock,
-    entity_pbar: tqdm[_T],
+    entity_pbar,
 ):
     """Worker function to delete log analytics entities from the queue"""
     while True:
