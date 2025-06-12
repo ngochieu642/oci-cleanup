@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 
 def list_object_versions(
-    object_storage_client: ObjectStorageClient, bucket_name: str, namespace: str
+        object_storage_client: ObjectStorageClient, bucket_name: str, namespace: str
 ) -> list[ObjectVersionSummary]:
     """List all object versions in a bucket with pagination"""
     try:
@@ -45,11 +45,11 @@ def list_object_versions(
 
 @retry(stop=stop_after_attempt(4), wait=wait_fixed(10))
 def delete_object_with_retry(
-    object_storage_client: ObjectStorageClient,
-    namespace: str,
-    bucket_name: str,
-    object_name: str,
-    version_id: str,
+        object_storage_client: ObjectStorageClient,
+        namespace: str,
+        bucket_name: str,
+        object_name: str,
+        version_id: str,
 ):
     """Delete an object version with retry mechanism"""
     return object_storage_client.delete_object(
@@ -62,7 +62,7 @@ def delete_object_with_retry(
 
 @retry(stop=stop_after_attempt(4), wait=wait_fixed(10))
 def delete_bucket_with_retry(
-    object_storage_client: ObjectStorageClient, namespace: str, bucket_name: str
+        object_storage_client: ObjectStorageClient, namespace: str, bucket_name: str
 ):
     """Delete a bucket with retry mechanism"""
     try:
@@ -82,7 +82,7 @@ def delete_bucket_with_retry(
 
 
 def verify_bucket_exists(
-    object_storage_client: ObjectStorageClient, namespace: str, bucket_name: str
+        object_storage_client: ObjectStorageClient, namespace: str, bucket_name: str
 ):
     """Verify if a bucket exists"""
     try:
@@ -99,7 +99,7 @@ def verify_bucket_exists(
 
 
 def list_preauthenticated_requests(
-    object_storage_client: ObjectStorageClient, namespace: str, bucket_name: str
+        object_storage_client: ObjectStorageClient, namespace: str, bucket_name: str
 ):
     """List all preauthenticated requests in a bucket with pagination"""
     try:
@@ -132,10 +132,10 @@ def list_preauthenticated_requests(
 
 @retry(stop=stop_after_attempt(4), wait=wait_fixed(10))
 def delete_par_with_retry(
-    object_storage_client: ObjectStorageClient,
-    namespace: str,
-    bucket_name: str,
-    par_id: str,
+        object_storage_client: ObjectStorageClient,
+        namespace: str,
+        bucket_name: str,
+        par_id: str,
 ):
     """Delete a preauthenticated request with retry mechanism"""
     try:
@@ -149,7 +149,7 @@ def delete_par_with_retry(
 
 
 def list_multipart_uploads(
-    object_storage_client: ObjectStorageClient, namespace: str, bucket_name: str
+        object_storage_client: ObjectStorageClient, namespace: str, bucket_name: str
 ) -> list[MultipartUploadPartSummary]:
     """List all multipart uploads in a bucket with pagination"""
     try:
@@ -180,11 +180,11 @@ def list_multipart_uploads(
 
 @retry(stop=stop_after_attempt(4), wait=wait_fixed(10))
 def abort_multipart_upload_with_retry(
-    object_storage_client: ObjectStorageClient,
-    namespace: str,
-    bucket_name: str,
-    object_name: str,
-    upload_id: str,
+        object_storage_client: ObjectStorageClient,
+        namespace: str,
+        bucket_name: str,
+        object_name: str,
+        upload_id: str,
 ):
     """Abort a multipart upload with retry mechanism"""
     try:
@@ -203,12 +203,12 @@ def abort_multipart_upload_with_retry(
 
 
 def delete_object_worker(
-    object_storage_client: ObjectStorageClient,
-    namespace: str,
-    bucket_name: str,
-    queue: Queue[ObjectVersionSummary],
-    progress_lock: Lock,
-    obj_pbar,
+        object_storage_client: ObjectStorageClient,
+        namespace: str,
+        bucket_name: str,
+        queue: Queue[ObjectVersionSummary],
+        progress_lock: Lock,
+        obj_pbar,
 ):
     """Worker function to delete objects from the queue"""
     while True:
@@ -243,12 +243,12 @@ def delete_object_worker(
 
 
 def clean_up_bucket(
-    object_storage_client: ObjectStorageClient,
-    bucket_name: str,
-    namespace: str,
-    bucket_pbar=None,
-    delete_bucket=True,
-    num_workers=1,
+        object_storage_client: ObjectStorageClient,
+        bucket_name: str,
+        namespace: str,
+        bucket_pbar=None,
+        delete_bucket=True,
+        num_workers=1,
 ):
     """Delete all objects from a bucket and then delete the bucket itself if delete_bucket is True"""
     bucket_desc = f"Cleaning bucket: {bucket_name}"
@@ -278,10 +278,10 @@ def clean_up_bucket(
 
         # Create progress bar with percentage format
         with tqdm(
-            total=len(objects),
-            desc=f"Deleting objects in {bucket_name}",
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
-            leave=False,
+                total=len(objects),
+                desc=f"Deleting objects in {bucket_name}",
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
+                leave=False,
         ) as obj_pbar:
             # Fill the queue with objects
             for item in objects:
@@ -314,10 +314,10 @@ def clean_up_bucket(
     pars = list_preauthenticated_requests(object_storage_client, namespace, bucket_name)
     if pars:
         with tqdm(
-            total=len(pars),
-            desc=f"Deleting preauthenticated requests in {bucket_name}",
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
-            leave=False,
+                total=len(pars),
+                desc=f"Deleting preauthenticated requests in {bucket_name}",
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
+                leave=False,
         ) as par_pbar:
             for par in pars:
                 try:
@@ -341,10 +341,10 @@ def clean_up_bucket(
     )
     if multipart_uploads:
         with tqdm(
-            total=len(multipart_uploads),
-            desc=f"Aborting multipart uploads in {bucket_name}",
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
-            leave=False,
+                total=len(multipart_uploads),
+                desc=f"Aborting multipart uploads in {bucket_name}",
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
+                leave=False,
         ) as upload_pbar:
             for upload in multipart_uploads:
                 try:
@@ -382,11 +382,11 @@ def clean_up_bucket(
 
 
 def clean_up_buckets_from_file(
-    oci_profile: str,
-    bucket_file: str,
-    namespace: str,
-    delete_bucket: bool = True,
-    num_workers: int = 1,
+        oci_profile: str,
+        bucket_file: str,
+        namespace: str,
+        delete_bucket: bool = True,
+        num_workers: int = 1,
 ):
     """Clean up multiple buckets listed in a file"""
     # Load OCI config from specified profile
@@ -459,13 +459,13 @@ def cli():
     help="Number of worker threads for parallel processing",
 )
 def clean_bucket(
-    oci_profile: str,
-    bucket_name: str,
-    bucket_file: str,
-    max_retries: str,
-    retry_delay: str,
-    delete_bucket: bool,
-    workers: int,
+        oci_profile: str,
+        bucket_name: str,
+        bucket_file: str,
+        max_retries: str,
+        retry_delay: str,
+        delete_bucket: bool,
+        workers: int,
 ):
     """Clean up OCI buckets by deleting their contents and optionally the buckets themselves"""
     if not bucket_name and not bucket_file:
@@ -499,7 +499,7 @@ def clean_bucket(
 
 
 def list_log_analytics_entities(
-    log_analytics_client: LogAnalyticsClient, compartment_id: str, namespace: str
+        log_analytics_client: LogAnalyticsClient, compartment_id: str, namespace: str
 ) -> list[LogAnalyticsEntitySummary]:
     """List all log analytics entities in a compartment with pagination"""
     try:
@@ -530,12 +530,13 @@ def list_log_analytics_entities(
 
 @retry(stop=stop_after_attempt(4), wait=wait_fixed(10))
 def delete_log_analytics_entity_with_retry(
-    log_analytics_client: LogAnalyticsClient, namespace: str, entity_id: str
+        log_analytics_client: LogAnalyticsClient, namespace: str, entity_id: str
 ):
     """Delete a log analytics entity with retry mechanism"""
     try:
         log_analytics_client.delete_log_analytics_entity(
-            namespace_name=namespace, entity_id=entity_id
+            namespace_name=namespace,
+            log_analytics_entity_id=entity_id,
         )
         return True
     except Exception as e:
@@ -544,10 +545,10 @@ def delete_log_analytics_entity_with_retry(
 
 
 def clean_log_analytics_entities(
-    log_analytics_client: LogAnalyticsClient,
-    compartment_id: str,
-    namespace: str,
-    num_workers=1,
+        log_analytics_client: LogAnalyticsClient,
+        compartment_id: str,
+        namespace: str,
+        num_workers=1,
 ):
     """Delete all log analytics entities in a compartment"""
     # Get list of log analytics entities
@@ -568,10 +569,10 @@ def clean_log_analytics_entities(
 
     # Create progress bar with percentage format
     with tqdm(
-        total=len(entities),
-        desc="Deleting log analytics entities",
-        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
-        leave=False,
+            total=len(entities),
+            desc="Deleting log analytics entities",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
+            leave=False,
     ) as entity_pbar:
         # Fill the queue with entities
         for entity in entities:
@@ -601,11 +602,11 @@ def clean_log_analytics_entities(
 
 
 def delete_log_analytics_entity_worker(
-    log_analytics_client: LogAnalyticsClient,
-    namespace: str,
-    queue: Queue[LogAnalyticsEntitySummary],
-    progress_lock: Lock,
-    entity_pbar,
+        log_analytics_client: LogAnalyticsClient,
+        namespace: str,
+        queue: Queue[LogAnalyticsEntitySummary],
+        progress_lock: Lock,
+        entity_pbar,
 ):
     """Worker function to delete log analytics entities from the queue"""
     while True:
