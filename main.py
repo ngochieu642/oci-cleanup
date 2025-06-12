@@ -1,10 +1,10 @@
-import argparse
 import oci
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
 from threading import Lock
 from tqdm import tqdm
 from tenacity import retry, stop_after_attempt, wait_fixed
+import click
 
 
 def list_object_versions(object_storage_client, bucket_name, namespace):
@@ -344,42 +344,39 @@ def clean_up_buckets_from_file(oci_profile, bucket_file, namespace, delete_bucke
             clean_up_bucket(object_storage_client, bucket_name, namespace, bucket_pbar, delete_bucket, num_workers)
 
 
-def main():
-    # Set up CLI argument parsing
-    parser = argparse.ArgumentParser(
-        description="Clean up OCI buckets by deleting all objects and the buckets themselves")
-    parser.add_argument("--oci_profile", required=True, help="OCI profile to use from the config file")
-    parser.add_argument("--bucket_name", help="Single bucket name to clean up")
-    parser.add_argument("--bucket_file", help="File containing list of buckets to clean up (one per line)")
-    parser.add_argument("--max_retries", type=int, default=4, help="Maximum number of retry attempts")
-    parser.add_argument("--retry_delay", type=int, default=10, help="Delay between retries in seconds")
-    parser.add_argument("--delete-bucket", action="store_true", default=True, 
-                       help="Delete the bucket after cleaning up its contents (default: True)")
-    parser.add_argument("--no-delete-bucket", action="store_false", dest="delete_bucket",
-                       help="Skip deleting the bucket after cleaning up its contents")
-    parser.add_argument("--workers", type=int, default=1,
-                       help="Number of worker threads for parallel processing (default: 1)")
+@click.group()
+def cli():
+    """OCI cleanup utilities"""
+    pass
 
-    # Parse arguments
-    args = parser.parse_args()
 
-    if not args.bucket_name and not args.bucket_file:
-        parser.error("Either --bucket_name or --bucket_file must be specified")
+@cli.command(name='clean-bucket')
+@click.option('--oci-profile', required=True, help='OCI profile to use from the config file')
+@click.option('--bucket-name', help='Single bucket name to clean up')
+@click.option('--bucket-file', type=click.Path(exists=True), help='File containing list of buckets to clean up (one per line)')
+@click.option('--max-retries', type=int, default=4, help='Maximum number of retry attempts')
+@click.option('--retry-delay', type=int, default=10, help='Delay between retries in seconds')
+@click.option('--delete-bucket/--no-delete-bucket', default=True, help='Delete the bucket after cleaning up its contents')
+@click.option('--workers', type=int, default=1, help='Number of worker threads for parallel processing')
+def clean_bucket(oci_profile, bucket_name, bucket_file, max_retries, retry_delay, delete_bucket, workers):
+    """Clean up OCI buckets by deleting their contents and optionally the buckets themselves"""
+    if not bucket_name and not bucket_file:
+        raise click.UsageError("Either --bucket-name or --bucket-file must be specified")
     
-    if args.bucket_name and args.bucket_file:
-        parser.error("Cannot specify both --bucket_name and --bucket_file")
+    if bucket_name and bucket_file:
+        raise click.UsageError("Cannot specify both --bucket-name and --bucket-file")
 
     # Initialize OCI client
-    config = oci.config.from_file(profile_name=args.oci_profile)
+    config = oci.config.from_file(profile_name=oci_profile)
     object_storage_client = oci.object_storage.ObjectStorageClient(config)
 
-    if args.bucket_file:
-        clean_up_buckets_from_file(args.oci_profile, args.bucket_file, 'lrbvkel2wjot', 
-                                 args.delete_bucket, args.workers)
+    if bucket_file:
+        clean_up_buckets_from_file(oci_profile, bucket_file, 'lrbvkel2wjot', 
+                                 delete_bucket, workers)
     else:
-        clean_up_bucket(object_storage_client, args.bucket_name, 'lrbvkel2wjot', 
-                       delete_bucket=args.delete_bucket, num_workers=args.workers)
+        clean_up_bucket(object_storage_client, bucket_name, 'lrbvkel2wjot', 
+                       delete_bucket=delete_bucket, num_workers=workers)
 
 
 if __name__ == "__main__":
-    main()
+    cli()

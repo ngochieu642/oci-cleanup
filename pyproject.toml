@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "click>=8.2.1",
     "oci>=2.150.2",
     "tenacity>=9.1.2",
     "tqdm>=4.67.1",
